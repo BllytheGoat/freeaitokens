@@ -4,15 +4,18 @@ require("./src/server/config");
 const { createApp } = require("./src/server/app");
 const { createUiApp } = require("./src/server/ui");
 
+// On Railway the public $PORT must serve the dashboard UI.
+// API runs on a fixed internal port (5000) so the OpenAI-compatible endpoint stays stable.
 const PORT = Number(process.env.PORT) || 5000;
 const HOST = process.env.HOST || "0.0.0.0";
-const UI_PORT = Number(process.env.UI_PORT) || 5500;
+const UI_PORT = Number(process.env.UI_PORT) || (process.env.PORT ? Number(process.env.PORT) : 5500);
+const API_PORT = Number(process.env.API_PORT) || 5000;
 
 const app = createApp();
 const uiApp = createUiApp();
 
-app.listen(PORT, HOST, () => {
-  const base = `http://127.0.0.1:${PORT}`;
+app.listen(API_PORT, HOST, () => {
+  const base = `http://127.0.0.1:${API_PORT}`;
 
   console.log(`freeaitokens OpenAI-compatible server`);
   console.log(`  Listening : http://${HOST}:${PORT}`);
