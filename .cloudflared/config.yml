@@ -1,0 +1,11 @@
+
+tunnel: freeaitokens-dashboard
+credentials-file: /root/.cloudflared/freeaitokens-dashboard.json
+protocol: http2
+
+ingress:
+  - hostname: freeaitokens.your-domain.com
+    service: http://localhost:5500
+  - hostname: api.freeaitokens.your-domain.com
+    service: http://localhost:5000
+  - service: http_status:404
