@@ -3,197 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FAI — Free AI Inference Dashboard</title>
+  <title>FreeAITokens — Siphon</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="index.css">
   <script src="index.js" defer></script>
 </head>
 <body>
-  <div class="app-container">
-    <!-- Header -->
-    <header class="dashboard-header">
-      <div class="logo-container">
-        <span class="logo-fai">FAI</span>
-        <span class="logo-divider">/</span>
-        <span class="logo-title">Free AI Inference</span>
+  <div class="shell">
+    <!-- Wordmark -->
+    <header class="topbar">
+      <div class="wordmark">
+        <span class="wm-glyph">⟡</span>
+        <span class="wm-name">FreeAI<span class="wm-accent">Tokens</span></span>
       </div>
-      <div class="system-status">
-        <div class="status-item">
-          <span class="status-dot online"></span>
-          <span class="status-label">API Status: Active</span>
-        </div>
-        <div class="status-item">
-          <span class="status-dot online"></span>
-          <span class="status-label">SQLite: Connected</span>
-        </div>
+      <div class="topbar-status">
+        <span class="pulse-dot" id="conn-dot"></span>
+        <span id="conn-label">linking to local server…</span>
       </div>
     </header>
 
-    <main class="dashboard-grid">
-      <!-- Row 1: KPI Stats -->
-      <section class="kpi-grid">
-        <div class="kpi-card" id="card-requests">
-          <span class="kpi-label">Total Requests</span>
-          <span class="kpi-value" id="stat-total-requests">—</span>
-        </div>
-        <div class="kpi-card" id="card-success-rate">
-          <span class="kpi-label">Success Rate</span>
-          <span class="kpi-value" id="stat-success-rate">—</span>
-        </div>
-        <div class="kpi-card" id="card-tokens-sent">
-          <span class="kpi-label">Tokens Sent (Prompt)</span>
-          <span class="kpi-value" id="stat-tokens-sent">—</span>
-        </div>
-        <div class="kpi-card" id="card-tokens-received">
-          <span class="kpi-label">Tokens Received (Completion)</span>
-          <span class="kpi-value" id="stat-tokens-received">—</span>
-        </div>
-      </section>
-
-      <!-- Row 2: Left: Platforms Breakdown, Right: Config Form -->
-      <div class="middle-section">
-        <!-- Platform Token Usage Breakdown -->
-        <section class="dashboard-card platform-card">
-          <div class="card-header">
-            <h2>Token Usage per Platform</h2>
-            <p class="card-subtitle">Aggregated metrics grouped by model/platform</p>
-          </div>
-          <div class="table-responsive">
-            <table class="dashboard-table" id="platform-table">
-              <thead>
-                <tr>
-                  <th>Platform / Model</th>
-                  <th>Requests</th>
-                  <th>Sent (Prompt)</th>
-                  <th>Received (Completion)</th>
-                  <th>Total Tokens</th>
-                  <th>Avg Latency</th>
-                </tr>
-              </thead>
-              <tbody id="platform-tbody">
-                <tr>
-                  <td colspan="6" class="table-empty">Loading platform stats...</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <!-- Configuration Settings -->
-        <section class="dashboard-card config-card">
-          <div class="card-header">
-            <h2>Server Settings</h2>
-            <p class="card-subtitle">Manage environment parameters and browser settings</p>
-          </div>
-          
-          <div class="alert-box" id="config-alert" style="display: none;"></div>
-
-          <form id="config-form" class="config-form">
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="input-CHAT_URL">ChatGPT Web Interface URL</label>
-                <input type="text" id="input-CHAT_URL" name="CHAT_URL" placeholder="https://chatgpt.com/">
-                <span class="input-info">Target Chat Page URL (Instant change)</span>
-              </div>
-
-              <div class="form-group">
-                <label for="input-AISTUDIO_CHAT_URL">AI Studio Web Interface URL</label>
-                <input type="text" id="input-AISTUDIO_CHAT_URL" name="AISTUDIO_CHAT_URL" placeholder="https://aistudio.google.com/prompts/new_chat">
-                <span class="input-info">Target AI Studio Page URL (Instant change)</span>
-              </div>
-
-              <div class="form-group">
-                <label for="input-USER_DATA_DIR">Chrome Persistent Profile Dir</label>
-                <input type="text" id="input-USER_DATA_DIR" name="USER_DATA_DIR" placeholder=".playwright/chrome-cdp-profile">
-                <span class="input-info">User profile folder (Instant change)</span>
-              </div>
-
-              <div class="form-group">
-                <label for="input-DEFAULT_TIMEOUT_MS">Playwright Connection Timeout (ms)</label>
-                <input type="number" id="input-DEFAULT_TIMEOUT_MS" name="DEFAULT_TIMEOUT_MS" placeholder="300000">
-                <span class="input-info">Maximum wait time for actions (Instant change)</span>
-              </div>
-
-              <div class="form-group">
-                <label for="input-CDP_PORT">Chrome CDP Debugging Port</label>
-                <input type="number" id="input-CDP_PORT" name="CDP_PORT" placeholder="9222">
-                <span class="input-info warn-restart">Requires server process restart</span>
-              </div>
-
-              <div class="form-group">
-                <label for="select-HEADLESS">Browser Run Mode</label>
-                <select id="select-HEADLESS" name="HEADLESS">
-                  <option value="true">Headless (Background)</option>
-                  <option value="false">Headed (Visible window)</option>
-                </select>
-                <span class="input-info">Open browser window (Instant change)</span>
-              </div>
-
-              <div class="form-group">
-                <label for="select-MANUAL_VERIFICATION">Manual Cloudflare Checks</label>
-                <select id="select-MANUAL_VERIFICATION" name="MANUAL_VERIFICATION">
-                  <option value="false">Disabled (Auto-send)</option>
-                  <option value="true">Enabled (Wait for verification)</option>
-                </select>
-                <span class="input-info">Pause to solve captcha (Instant change)</span>
-              </div>
-
-              <div class="form-group">
-                <label for="input-PORT">Main API Server Port</label>
-                <input type="number" id="input-PORT" name="PORT" placeholder="5000">
-                <span class="input-info warn-restart">Requires server process restart</span>
-              </div>
-
-              <div class="form-group">
-                <label for="input-HOST">Main API Server Host</label>
-                <input type="text" id="input-HOST" name="HOST" placeholder="0.0.0.0">
-                <span class="input-info warn-restart">Requires server process restart</span>
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button type="button" id="reset-config-btn" class="btn btn-secondary">Reset to Defaults</button>
-              <button type="submit" id="save-config-btn" class="btn btn-primary">Save & Apply Settings</button>
-            </div>
-          </form>
-        </section>
+    <!-- HERO: the siphon -->
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">no gpu · no api keys · no bill</p>
+        <h1 class="hero-title">Your browser tabs,<br><span class="amber">poured into your code.</span></h1>
+        <p class="hero-sub">FreeAITokens bridges ChatGPT, Gemini and AI Studio into one OpenAI-compatible endpoint — tokens routed straight from the pages you already have open.</p>
       </div>
 
-      <!-- Row 3: Recent Request Logs -->
-      <section class="dashboard-card logs-card">
-        <div class="card-header">
-          <h2>Recent Request Logs</h2>
-          <p class="card-subtitle">Last 20 requests tracked via SQLite</p>
+      <div class="siphon" aria-hidden="true">
+        <!-- sources -->
+        <div class="nodes">
+          <div class="node" data-platform="chatgpt-web"><span class="node-dot cg"></span>ChatGPT</div>
+          <div class="node" data-platform="gemini-web"><span class="node-dot gm"></span>Gemini</div>
+          <div class="node" data-platform="aistudio-web"><span class="node-dot as"></span>AI Studio</div>
         </div>
-        <div class="table-responsive">
-          <table class="dashboard-table logs-table" id="logs-table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Request ID</th>
-                <th>Platform / Model</th>
-                <th>Sent</th>
-                <th>Received</th>
-                <th>Total</th>
-                <th>Duration</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="logs-tbody">
-              <tr>
-                <td colspan="8" class="table-empty">Loading requests log...</td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- conduit -->
+        <div class="conduit">
+          <div class="packets" id="packets"></div>
+          <div class="conduit-core"></div>
         </div>
-      </section>
-    </main>
-    
-    <footer class="dashboard-footer">
-      <p>FAI Free AI Inference — Powered by Node.js & Playwright</p>
-    </footer>
+        <!-- sink -->
+        <div class="sink">
+          <div class="sink-label">your app</div>
+          <code class="sink-end">localhost:5000/v1</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- odometer -->
+    <section class="meter">
+      <div class="meter-main">
+        <span class="meter-value" id="odometer">0</span>
+        <span class="meter-unit">tokens routed</span>
+      </div>
+      <div class="meter-stats">
+        <div class="mstat"><span class="mstat-v" id="m-req">—</span><span class="mstat-l">requests</span></div>
+        <div class="mstat"><span class="mstat-v" id="m-sent">—</span><span class="mstat-l">prompt</span></div>
+        <div class="mstat"><span class="mstat-v" id="m-recv">—</span><span class="mstat-l">completion</span></div>
+        <div class="mstat"><span class="mstat-v" id="m-rate">—</span><span class="mstat-l">success</span></div>
+      </div>
+    </section>
+
+    <!-- live log -->
+    <section class="logpanel">
+      <div class="log-head">
+        <h2>Live request stream</h2>
+        <span class="log-hint">last 20 · from SQLite</span>
+      </div>
+      <div class="log" id="log">
+        <div class="log-empty">awaiting first request…</div>
+      </div>
+    </section>
+
+    <!-- quiet config -->
+    <details class="config">
+      <summary>Server settings</summary>
+      <div class="alert" id="config-alert" hidden></div>
+      <form id="config-form" class="cfg-grid"></form>
+    </details>
+
+    <footer class="foot">FreeAITokens · a local bridge for free browser AI · Node.js + Playwright</footer>
   </div>
 </body>
 </html>
