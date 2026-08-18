@@ -1,243 +1,135 @@
-"use strict";
+// FreeAITokens dashboard — siphon UI logic
+const $ = (s) => document.querySelector(s);
+const connDot = $("#conn-dot");
+const connLabel = $("#conn-label");
+const odometer = $("#odometer");
+const packets = $("#packets");
+const logEl = $("#log");
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Elements
-  const statTotalRequests = document.getElementById("stat-total-requests");
-  const statSuccessRate = document.getElementById("stat-success-rate");
-  const statTokensSent = document.getElementById("stat-tokens-sent");
-  const statTokensReceived = document.getElementById("stat-tokens-received");
+let totalTokens = 0;
+let renderedTokens = 0;
 
-  const platformTbody = document.getElementById("platform-tbody");
-  const logsTbody = document.getElementById("logs-tbody");
-
-  const configForm = document.getElementById("config-form");
-  const configAlert = document.getElementById("config-alert");
-  const resetConfigBtn = document.getElementById("reset-config-btn");
-
-  // Fetch SQLite Statistics
-  async function fetchStats() {
-    try {
-      const res = await fetch("/api/stats");
-      if (!res.ok) throw new Error("Failed to load statistics");
-      
-      const { data } = await res.json();
-      updateDashboardStats(data);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-    }
+// ---- live connection state ----
+async function ping() {
+  try {
+    const r = await fetch("/api/stats", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    connDot.className = "pulse-dot live";
+    connLabel.textContent = "connected to local server";
+    return await r.json();
+  } catch (e) {
+    connDot.className = "pulse-dot dead";
+    connLabel.textContent = "server offline — start `node server.js`";
+    return null;
   }
+}
 
-  // Update Statistics UI
-  function updateDashboardStats(data) {
-    const { summary, platformBreakdown, recentRequests } = data;
-
-    // 1. KPI Cards
-    const total = summary.total_requests || 0;
-    const success = summary.success_requests || 0;
-    const rate = total > 0 ? ((success / total) * 100).toFixed(1) + "%" : "100.0%";
-
-    statTotalRequests.textContent = total.toLocaleString();
-    statSuccessRate.textContent = rate;
-    statTokensSent.textContent = (summary.total_prompt_tokens || 0).toLocaleString();
-    statTokensReceived.textContent = (summary.total_completion_tokens || 0).toLocaleString();
-
-    // 2. Platform Breakdown Table
-    if (!platformBreakdown || platformBreakdown.length === 0) {
-      platformTbody.innerHTML = `
-        <tr>
-          <td colspan="6" class="table-empty">No requests processed yet. Direct traffic to the API port to log details.</td>
-        </tr>
-      `;
-    } else {
-      platformTbody.innerHTML = platformBreakdown
-        .map((row) => {
-          const avgLatency = row.avg_duration_ms > 0 
-            ? (row.avg_duration_ms / 1000).toFixed(2) + "s" 
-            : "0.00s";
-          const totalT = row.total_tokens || 0;
-          return `
-            <tr>
-              <td><strong>${row.model}</strong></td>
-              <td>${(row.request_count || 0).toLocaleString()}</td>
-              <td class="font-mono">${(row.prompt_tokens || 0).toLocaleString()}</td>
-              <td class="font-mono">${(row.completion_tokens || 0).toLocaleString()}</td>
-              <td class="font-mono"><strong>${totalT.toLocaleString()}</strong></td>
-              <td class="font-mono">${avgLatency}</td>
-            </tr>
-          `;
-        })
-        .join("");
-    }
-
-    // 3. Recent Requests Log
-    if (!recentRequests || recentRequests.length === 0) {
-      logsTbody.innerHTML = `
-        <tr>
-          <td colspan="8" class="table-empty">No logged requests in database.</td>
-        </tr>
-      `;
-    } else {
-      logsTbody.innerHTML = recentRequests
-        .map((row) => {
-          const dateStr = row.timestamp ? formatTimestamp(row.timestamp) : "—";
-          const duration = row.duration_ms > 0 
-            ? (row.duration_ms / 1000).toFixed(2) + "s" 
-            : "0s";
-          
-          const isSuccess = row.status === "success";
-          const statusClass = isSuccess ? "status-success" : "status-error";
-          const statusBadge = isSuccess 
-            ? `<span class="status-badge success">Success</span>` 
-            : `<span class="status-badge error" title="${escapeHtml(row.error_message || '')}">Error</span>`;
-
-          const reqIdShort = row.request_id ? row.request_id.slice(0, 18) + "..." : "—";
-          const titleAttr = row.request_id ? `title="${row.request_id}"` : "";
-
-          return `
-            <tr class="${statusClass}">
-              <td>${dateStr}</td>
-              <td ${titleAttr} class="font-mono">${reqIdShort}</td>
-              <td><strong>${row.model}</strong></td>
-              <td>${(row.prompt_tokens || 0).toLocaleString()}</td>
-              <td>${(row.completion_tokens || 0).toLocaleString()}</td>
-              <td><strong>${(row.total_tokens || 0).toLocaleString()}</strong></td>
-              <td>${duration}</td>
-              <td>${statusBadge}</td>
-            </tr>
-          `;
-        })
-        .join("");
-    }
+// ---- odometer (counts up smoothly) ----
+function tick() {
+  if (renderedTokens < totalTokens) {
+    const step = Math.max(1, Math.ceil((totalTokens - renderedTokens) / 12));
+    renderedTokens = Math.min(totalTokens, renderedTokens + step);
+    odometer.textContent = renderedTokens.toLocaleString();
   }
+  requestAnimationFrame(tick);
+}
+tick();
 
-  // Fetch Current Configurations
-  async function fetchConfig() {
-    try {
-      const res = await fetch("/api/config");
-      if (!res.ok) throw new Error("Failed to load server configurations");
-      
-      const { data } = await res.json();
-      populateConfigForm(data);
-    } catch (error) {
-      showAlert("error", "Error fetching configurations: " + error.message);
-    }
+// ---- render stats into meter ----
+function renderStats(d) {
+  const s = d?.data || {};
+  totalTokens = (s.totalTokensSent || 0) + (s.totalTokensReceived || 0);
+  $("#m-req").textContent = (s.totalRequests ?? "—").toLocaleString?.() ?? s.totalRequests ?? "—";
+  $("#m-sent").textContent = fmt(s.totalTokensSent);
+  $("#m-recv").textContent = fmt(s.totalTokensReceived);
+  const rate = s.totalRequests ? Math.round(((s.successCount || 0) / s.totalRequests) * 100) : "—";
+  $("#m-rate").textContent = rate === "—" ? "—" : rate + "%";
+}
+
+function fmt(n) {
+  if (n == null) return "—";
+  return n >= 1000 ? (n / 1000).toFixed(1) + "k" : "" + n;
+}
+
+// ---- request log ----
+function renderLog(d) {
+  const rows = d?.data?.recentRequests || [];
+  if (!rows.length) { logEl.innerHTML = '<div class="log-empty">awaiting first request…</div>'; return; }
+  logEl.innerHTML = rows.slice(0, 20).map((r) => {
+    const ok = r.status === "success" || r.status === 200 || r.status === "ok";
+    const t = new Date(r.timestamp || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const plat = r.platform || r.model || "—";
+    const tok = (r.tokensSent || 0) + (r.tokensReceived || 0);
+    return `<div class="log-row ${ok ? "ok" : "bad"}">
+      <span class="lr-time">${t}</span>
+      <span class="lr-plat">${escapeHtml(plat)}</span>
+      <span class="lr-tok">${tok} tok</span>
+      <span class="lr-stat">${ok ? "ok" : "fail"}</span>
+    </div>`;
+  }).join("");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---- siphon packets ----
+function spawnPacket() {
+  const p = document.createElement("div");
+  p.className = "packet";
+  p.style.animationDelay = (Math.random() * 2).toFixed(2) + "s";
+  p.style.top = (38 + Math.random() * 24) + "%";
+  packets.appendChild(p);
+  setTimeout(() => p.remove(), 2600);
+}
+
+// ---- config form ----
+async function loadConfig() {
+  try {
+    const r = await fetch("/api/config", { cache: "no-store" });
+    if (!r.ok) return;
+    const { data } = await r.json();
+    const form = $("#config-form");
+    const FIELDS = [
+      ["CHAT_URL", "ChatGPT URL"],
+      ["AISTUDIO_CHAT_URL", "AI Studio URL"],
+      ["USER_DATA_DIR", "Chrome profile dir"],
+      ["DEFAULT_TIMEOUT_MS", "Timeout (ms)", "number"],
+      ["CDP_PORT", "CDP port", "number"],
+      ["PORT", "API port", "number"],
+      ["HOST", "API host"],
+    ];
+    form.innerHTML = FIELDS.map(([k, label, type]) => `
+      <div class="fg">
+        <label for="cfg-${k}">${label}</label>
+        <input id="cfg-${k}" name="${k}" type="${type || "text"}" value="${escapeHtml(data[k] ?? "")}">
+      </div>`).join("");
+    form.addEventListener("submit", saveConfig);
+  } catch (e) {}
+}
+
+async function saveConfig(e) {
+  e.preventDefault();
+  const alert = $("#config-alert");
+  const body = {};
+  new FormData(e.target).forEach((v, k) => (body[k] = v));
+  try {
+    const r = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    alert.hidden = false;
+    alert.className = "alert " + (r.ok ? "ok" : "bad");
+    alert.textContent = r.ok ? "Saved. Changes apply on next request (restart for port/host)." : "Save failed: " + (j.error || r.status);
+  } catch (err) {
+    alert.hidden = false; alert.className = "alert bad"; alert.textContent = "Could not reach server.";
   }
+}
 
-  // Populate Form Fields
-  function populateConfigForm(configData) {
-    const { current, metadata } = configData;
-
-    for (const [key, val] of Object.entries(current)) {
-      const inputEl = document.getElementById(`input-${key}`);
-      const selectEl = document.getElementById(`select-${key}`);
-
-      if (inputEl) {
-        inputEl.value = val;
-        // Highlight restart required info label if true
-        const restartLabel = inputEl.parentNode.querySelector(".warn-restart");
-        if (restartLabel && metadata[key].requiresRestart) {
-          restartLabel.innerHTML = "Requires server restart to apply";
-        }
-      } else if (selectEl) {
-        selectEl.value = String(val);
-      }
-    }
-  }
-
-  // Save Configurations Action
-  configForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    configAlert.style.display = "none";
-
-    const formData = new FormData(configForm);
-    const updates = {};
-    for (const [key, value] of formData.entries()) {
-      updates[key] = value;
-    }
-
-    try {
-      const res = await fetch("/api/config/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        showAlert("success", "Settings applied successfully! Dynamic browser parameters take effect immediately. Network port changes require restarting the server process.");
-        fetchConfig(); // Reload form config status
-      } else {
-        showAlert("error", data.error || "Failed to update configurations");
-      }
-    } catch (error) {
-      showAlert("error", "Network error updating configurations: " + error.message);
-    }
-  });
-
-  // Reset Configurations Action
-  resetConfigBtn.addEventListener("click", async () => {
-    if (!confirm("Are you sure you want to restore default configuration environment settings? This will clear all overrides.")) {
-      return;
-    }
-
-    configAlert.style.display = "none";
-
-    try {
-      const res = await fetch("/api/config/reset", { method: "POST" });
-      const data = await res.json();
-
-      if (res.ok) {
-        showAlert("success", "Configurations reset to default environment settings! Restored options are loaded.");
-        fetchConfig(); // Reload populated inputs
-      } else {
-        showAlert("error", data.error || "Failed to reset configurations");
-      }
-    } catch (error) {
-      showAlert("error", "Network error resetting configurations: " + error.message);
-    }
-  });
-
-  // Helper: Display Banners
-  function showAlert(type, message) {
-    configAlert.textContent = message;
-    configAlert.className = `alert-box ${type}`;
-    configAlert.style.display = "block";
-    window.scrollTo({ top: configForm.offsetTop - 50, behavior: "smooth" });
-  }
-
-  // Helper: Format Timestamp (UTC/Local)
-  function formatTimestamp(timestampStr) {
-    // Expected format from SQLite is "YYYY-MM-DD HH:MM:SS" (in UTC)
-    // Convert it to local time beautifully
-    const t = timestampStr.replace(" ", "T") + "Z";
-    const date = new Date(t);
-    if (isNaN(date.getTime())) return timestampStr;
-    
-    const pad = (n) => String(n).padStart(2, "0");
-    const y = date.getFullYear();
-    const m = pad(date.getMonth() + 1);
-    const d = pad(date.getDate());
-    const hr = pad(date.getHours());
-    const min = pad(date.getMinutes());
-    const sec = pad(date.getSeconds());
-    
-    return `${y}-${m}-${d} ${hr}:${min}:${sec}`;
-  }
-
-  // Helper: Escape HTML strings
-  function escapeHtml(str) {
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  // Init Bootstraps
-  fetchStats();
-  fetchConfig();
-
-  // Auto poll metrics every 5 seconds
-  setInterval(fetchStats, 5000);
-});
+// ---- poll loop ----
+async function refresh() {
+  const s = await ping();
+  if (s) { renderStats(s); renderLog(s); }
+}
+refresh();
+loadConfig();
+setInterval(refresh, 3000);
+setInterval(spawnPacket, 1400);
